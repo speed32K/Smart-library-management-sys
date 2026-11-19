@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — Smart Library</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="header" style="max-width:1000px">
+  <span class="brand"><span id="logo"></span> Admin Panel</span>
+  <button class="btn outline" id="logout"><span id="logoutIcon"></span> Logout</button>
+</header>
+
+<main class="admin">
+  <div class="card stat">
+    <div class="ico" id="libIcon"></div>
+    <div><p>Total books uploaded</p><b id="total">0</b></div>
+  </div>
+
+  <div class="tabs">
+    <button class="btn outline tall" data-view="add"><span class="ic" data-i="plus"></span> Add New Book</button>
+    <button class="btn outline tall" data-view="delete"><span class="ic" data-i="trash"></span> Delete Book</button>
+    <button class="btn outline tall" data-view="list"><span class="ic" data-i="list"></span> View All Books</button>
+  </div>
+
+  <!-- Add -->
+  <div class="card panel hidden" id="add">
+    <h2>Add New Book</h2>
+    <form id="addForm">
+      <div class="grid2">
+        <div class="field"><label>Book name</label><input id="aName"></div>
+        <div class="field"><label>Serial number</label><input id="aSerial"></div>
+        <div class="field"><label>Rack</label><input id="aRack"></div>
+        <div class="field"><label>Shelf (Deck)</label><input id="aDeck"></div>
+        <div class="field"><label>Direction</label>
+          <select id="aDir"><option value="">Select direction</option><option>Left</option><option>Right</option></select>
+        </div>
+      </div>
+      <p class="note hidden" id="addMsg"></p>
+      <button class="btn" type="submit" style="margin-top:12px">Add Book</button>
+    </form>
+  </div>
+
+  <!-- Delete -->
+  <div class="card panel hidden" id="delete">
+    <h2>Delete Book</h2>
+    <form class="narrow" id="delForm">
+      <div class="field"><label>Serial number</label><input id="dSerial"></div>
+      <p class="note hidden" id="delMsg"></p>
+      <button class="btn danger" type="submit" style="margin-top:12px">Delete</button>
+    </form>
+  </div>
+
+  <!-- View all -->
+  <div class="card panel hidden" id="list">
+    <div class="toolbar">
+      <h2>All Books</h2>
+      <input id="vSearch" placeholder="Filter by name or serial…">
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Serial</th><th>Book name</th><th>Rack</th><th>Deck</th><th>Direction</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let books = [];
+
+// Only logged-in admins may see this page
+isAdmin().then(ok => { if (!ok) location.replace('index.html'); });
+$('logo').innerHTML = ICON.book;
+$('logoutIcon').innerHTML = ICON.logout;
+$('libIcon').innerHTML = ICON.library;
+document.querySelectorAll('.ic').forEach(el => el.innerHTML = ICON[el.dataset.i]);
+
+$('logout').onclick = async () => { await logout(); location.href = 'index.html'; };
+
+function note(el, ok, text) {
+  el.className = 'note ' + (ok ? 'ok' : 'err');
+  el.textContent = text;
+}
+
+async function refresh() {
+  try { books = await getBooks(); } catch (e) { /* keep the last list if offline */ }
+  $('total').textContent = books.length;
+  renderTable();
+}
+
+function renderTable() {
+  const s = $('vSearch').value.trim().toLowerCase();
+  const list = books.filter(b => !s || b.name.toLowerCase().includes(s) || b.serial.toLowerCase().includes(s));
+  $('tbody').innerHTML = list.length
+    ? list.map(b => `<tr><td class="serial">${esc(b.serial)}</td><td>${esc(b.name)}</td><td>${esc(b.rack)}</td><td>${esc(b.deck)}</td><td>${esc(b.direction)}</td></tr>`).join('')
+    : '<tr><td class="none" colspan="5">No books found.</td></tr>';
+}
+
+// Switch between Add / Delete / View All
+function showView(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
+  $(id).classList.remove('hidden');
+  document.querySelectorAll('[data-view]').forEach(b => {
+    b.classList.toggle('outline', b.dataset.view !== id);
+  });
+  refresh();
+}
+document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => showView(b.dataset.view));
+
+$('addForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = { name: $('aName').value.trim(), serial: $('aSerial').value.trim(), rack: $('aRack').value.trim(),
+              deck: $('aDeck').value.trim(), direction: $('aDir').value };
+  if (!f.name || !f.serial || !f.rack || !f.deck || !f.direction) return note($('addMsg'), false, 'Please fill in all fields.');
+  const err = await addBook(f);
+  if (err) return note($('addMsg'), false, err);
+  note($('addMsg'), true, `“${f.name}” added successfully.`);
+  e.target.reset();
+  refresh();
+});
+
+$('delForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const s = $('dSerial').value.trim();
+  if (!s) return note($('delMsg'), false, 'Enter a serial number.');
+  const book = books.find(b => b.serial.toLowerCase() === s.toLowerCase());
+  if (!book) return note($('delMsg'), false, 'No book with that serial number.');
+  if (!confirm(`Delete "${book.name}" (serial ${book.serial}) from every device?`)) return;
+  try {
+    const ok = await deleteBook(s);
+    note($('delMsg'), ok, ok ? 'Book deleted successfully.' : 'Could not delete. Please log in again.');
+  } catch (err) { note($('delMsg'), false, err.message); }
+  e.target.reset();
+  refresh();
+});
+
+$('vSearch').addEventListener('input', renderTable);
+
+showView('add');
+onBooksChanged(refresh); // another admin device changed something → update here too
+</script>
+</body>
+</html>

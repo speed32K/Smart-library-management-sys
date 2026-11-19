@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Library — Find any book</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="home">
+  <header class="header">
+    <a class="brand" href="index.html"><span id="logo"></span> Smart Library</a>
+    <button class="btn" id="openAdmin"><span id="shield"></span> Admin Panel</button>
+  </header>
+
+  <main class="hero-wrap">
+    <div class="hero">
+      <h1>Smart Library <span>Management System</span></h1>
+      <p>Find any book in seconds — search by name or serial number.</p>
+      <form class="searchbar" id="searchForm">
+        <div class="wrap">
+          <span id="searchIcon"></span>
+          <input id="q" placeholder="Book name or serial number…" required autofocus>
+        </div>
+        <button class="btn big" type="submit">Search</button>
+      </form>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="overlay">
+  <form class="card modal" id="loginForm">
+    <h2>Admin login</h2>
+    <div class="field"><label>Username</label><input id="user" placeholder="@username" autocomplete="off"></div>
+    <div class="field"><label>Password</label><input id="pass" type="password"></div>
+    <p class="note err hidden" id="loginErr">Invalid username or password.</p>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button class="btn outline full" type="button" id="cancel">Cancel</button>
+      <button class="btn full" type="submit">Login</button>
+    </div>
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+<script>
+document.getElementById('logo').innerHTML = ICON.book;
+document.getElementById('shield').innerHTML = ICON.shield;
+document.getElementById('searchIcon').innerHTML = ICON.search;
+
+document.getElementById('searchForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const q = document.getElementById('q').value.trim();
+  if (q) location.href = 'result.html?q=' + encodeURIComponent(q);
+});
+
+const overlay = document.getElementById('overlay');
+document.getElementById('openAdmin').onclick = async () => {
+  if (await isAdmin()) { location.href = 'admin.html'; return; } // already logged in
+  document.getElementById('loginErr').classList.add('hidden');
+  overlay.classList.add('show');
+  document.getElementById('user').focus();
+};
+document.getElementById('cancel').onclick = () => overlay.classList.remove('show');
+overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('show'); });
+
+document.getElementById('loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.disabled = true; btn.textContent = 'Checking…';
+  const ok = await login(document.getElementById('user').value, document.getElementById('pass').value);
+  btn.disabled = false; btn.textContent = 'Login';
+  if (ok) location.href = 'admin.html';
+  else document.getElementById('loginErr').classList.remove('hidden');
+});
+</script>
+</body>
+</html>
